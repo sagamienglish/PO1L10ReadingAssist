@@ -202,13 +202,14 @@
             const [isFullPlaying, setIsFullPlaying] = useState(false);
             const [isPaused, setIsPaused] = useState(false);
             const [voices, setVoices] = useState([]);
+            const [playbackRate, setPlaybackRate] = useState(1.0); // Default speed
             const [level3HiddenKeys, setLevel3HiddenKeys] = useState(new Set());
             
             // Ref for managing chained playback
             const playbackRef = useRef({
                 sentences: [],
                 currentIndex: -1,
-                isPausedFlag: false // フラグを追加して意図しないリセットを防ぐ
+                isPausedFlag: false
             });
 
             // パートやレベルが変わったら停止
@@ -218,9 +219,20 @@
             }, [currentPart, level]);
 
             useEffect(() => {
-                const loadVoices = () => { setVoices(window.speechSynthesis.getVoices()); };
+                const loadVoices = () => { 
+                    const v = window.speechSynthesis.getVoices();
+                    if (v.length > 0) {
+                        setVoices(v);
+                    }
+                };
                 loadVoices();
-                if (window.speechSynthesis.onvoiceschanged !== undefined) window.speechSynthesis.onvoiceschanged = loadVoices;
+                if (window.speechSynthesis.onvoiceschanged !== undefined) {
+                    window.speechSynthesis.onvoiceschanged = loadVoices;
+                }
+                
+                // Retry loading voices for iOS Safari which might be lazy
+                const timer = setTimeout(loadVoices, 500);
+                return () => clearTimeout(timer);
             }, []);
 
             // Data Analysis
@@ -288,13 +300,19 @@
             };
 
             const getPreferredVoice = () => {
-                if (voices.length === 0) return null;
+                if (!voices || voices.length === 0) {
+                     // Try getting voices again if empty
+                     const v = window.speechSynthesis.getVoices();
+                     if (v.length > 0) setVoices(v);
+                     return null;
+                }
+                
                 // iOS/Mac向けの高品質音声を優先リストに追加
                 return voices.find(v => v.name === 'Google US English') ||
                        voices.find(v => v.name === 'Samantha') ||          // iOS/Mac (US) - High Quality
                        voices.find(v => v.name === 'Daniel') ||            // iOS/Mac (UK) - High Quality
                        voices.find(v => v.name === 'Karen') ||             // iOS/Mac (AU)
-                       voices.find(v => v.name.includes('Siri')) ||        // Siri Voices (if accessible)
+                       voices.find(v => v.name.includes('Siri') && v.lang.startsWith('en')) || // Siri Voices
                        voices.find(v => v.name.includes('Zira')) ||        // Windows
                        voices.find(v => v.lang === 'en-US') ||
                        voices.find(v => v.lang.startsWith('en'));
@@ -302,7 +320,6 @@
 
             // Playback Control
             const stopPlayback = () => {
-                // フラグをクリアしてからキャンセル
                 playbackRef.current.isPausedFlag = false;
                 window.speechSynthesis.cancel();
                 setIsFullPlaying(false);
@@ -314,16 +331,20 @@
 
             const pausePlayback = () => {
                 if (isFullPlaying && !isPaused) {
-                    playbackRef.current.isPausedFlag = true; // フラグを立てる
+                    playbackRef.current.isPausedFlag = true;
                     window.speechSynthesis.cancel(); 
                     setIsPaused(true);
                 }
             };
 
+            const togglePlaybackRate = () => {
+                // Toggle between 1.0 (Normal) and 0.8 (Slow)
+                setPlaybackRate(prev => prev === 1.0 ? 0.8 : 1.0);
+            };
+
             const playNextSentence = () => {
                 const { sentences, currentIndex, isPausedFlag } = playbackRef.current;
                 
-                // ポーズ中なら何もしない
                 if (isPausedFlag) return;
 
                 const nextIndex = currentIndex + 1;
@@ -340,18 +361,17 @@
 
                 const utterance = new SpeechSynthesisUtterance(sentence.text);
                 utterance.lang = 'en-US';
-                utterance.rate = 0.85; 
+                utterance.rate = playbackRate; // Use state rate
+                
                 const voice = getPreferredVoice();
                 if (voice) utterance.voice = voice;
 
                 utterance.onend = () => {
-                    // ポーズフラグが立っていない場合のみ次へ
                     if (!playbackRef.current.isPausedFlag) {
                          playNextSentence();
                     }
                 };
                 utterance.onerror = () => {
-                    // エラー時もポーズフラグが立っていなければ停止
                     if (!playbackRef.current.isPausedFlag) {
                         stopPlayback();
                     }
@@ -361,20 +381,15 @@
             };
 
             const startOrResumePlayback = () => {
-                if (isFullPlaying && !isPaused) return; // Already playing
+                if (isFullPlaying && !isPaused) return;
 
                 if (isPaused && playbackRef.current.sentences.length > 0) {
-                    // Resume
                     playbackRef.current.isPausedFlag = false;
                     setIsPaused(false);
-                    // 現在のインデックスを一つ戻して、再度 playNextSentence を呼ぶことで
-                    // インクリメントされ、元の位置から再生される
                     playbackRef.current.currentIndex -= 1; 
                     playNextSentence();
                 } else {
-                    // Start New
                     stopPlayback(); 
-                    // 少し待ってから開始（キャンセル処理の確実化）
                     setTimeout(() => {
                         setIsFullPlaying(true);
                         setIsPaused(false);
@@ -403,9 +418,11 @@
                 window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(foundSentence.text);
                 utterance.lang = 'en-US';
-                utterance.rate = 0.85; 
+                utterance.rate = playbackRate; // Use state rate
+                
                 const voice = getPreferredVoice();
                 if (voice) utterance.voice = voice;
+                
                 utterance.onstart = () => setSpeakingRange({ start: foundSentence.start, end: foundSentence.end });
                 utterance.onend = () => setSpeakingRange(null);
                 utterance.onerror = () => setSpeakingRange(null);
@@ -476,7 +493,7 @@
                         <div className="bg-white rounded-xl shadow-lg border-t-8 p-6 md:p-12 min-h-[60vh] theme-border">
                             <h2 className="theme-text text-sm font-bold uppercase tracking-widest mb-6 border-b border-gray-200 pb-2 ui-font flex justify-between items-center gap-2">
                                 <span className="truncate">Being Different Is Beautiful - {currentPart.replace('part', 'Part ')}</span>
-                                <div className="flex space-x-2 flex-shrink-0">
+                                <div className="flex space-x-2 flex-shrink-0 items-center">
                                     <button 
                                         onClick={startOrResumePlayback} 
                                         className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isFullPlaying && !isPaused ? 'active-play-btn' : 'bg-teal-50 text-teal-700 hover:bg-teal-100'}`}
@@ -499,6 +516,15 @@
                                         title="Stop"
                                     >
                                         <i className="fas fa-stop"></i>
+                                    </button>
+                                    
+                                    {/* Speed Toggle Button */}
+                                    <button 
+                                        onClick={togglePlaybackRate}
+                                        className="h-8 px-2 ml-2 rounded text-xs font-bold transition-all bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-300"
+                                        title="Toggle Speed"
+                                    >
+                                        {playbackRate.toFixed(1)}x
                                     </button>
                                 </div>
                             </h2>
