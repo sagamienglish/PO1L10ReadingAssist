@@ -31,16 +31,24 @@
             border-color: #3EA39E;
         }
         
-        .range-slider::-webkit-slider-thumb {
+        /* ヘッダー内スライダーのスタイル */
+        .header-slider {
             -webkit-appearance: none;
             appearance: none;
-            width: 24px;
-            height: 24px;
-            background: #3EA39E;
+            background: rgba(255, 255, 255, 0.3); /* トラックの色 */
+            outline: none;
+            border-radius: 999px;
+        }
+        .header-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 20px;
+            height: 20px;
+            background: #ffffff; /* つまみの色 */
             cursor: pointer;
             border-radius: 50%;
-            border: 2px solid white;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+            border: 2px solid #2D7A76;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.2);
         }
 
         /* 隠れた単語のスタイル */
@@ -198,7 +206,6 @@
                     if (newSet.has(key)) {
                         // 既に表示されているなら隠す（トグルする場合）
                         // newSet.delete(key); 
-                        // 今回は「見えるようにする」なので、一度見えたらそのままの方が学習に良いかも
                     } else {
                         newSet.add(key);
                     }
@@ -305,36 +312,43 @@
                 });
             };
 
-            const getLevelDescription = (lvl) => {
-                switch(lvl) {
-                    case 1: return "Level 1: 全文表示";
-                    case 2: return "Level 2: 新出語彙 (頭文字)";
-                    case 3: return "Level 3: 内容語隠し";
-                    case 4: return "Level 4: 頭文字のみ (全文)";
-                    default: return "";
-                }
-            };
-
             return (
-                <div className="min-h-screen flex flex-col items-center pb-24">
+                <div className="min-h-screen flex flex-col items-center">
                     {/* Header */}
                     <div className="w-full theme-bg text-white p-4 shadow-md sticky top-0 z-10">
-                        <div className="max-w-3xl mx-auto flex flex-col md:flex-row justify-between items-center">
-                            <h1 className="text-xl font-bold mb-2 md:mb-0 ui-font tracking-wide">Lesson 10 Reading Trainer</h1>
-                            <div className="flex space-x-2 bg-black/10 p-1 rounded-lg">
-                                {['part1', 'part2', 'part3'].map((part) => (
-                                    <button
-                                        key={part}
-                                        onClick={() => { setCurrentPart(part); window.scrollTo(0,0); }}
-                                        className={`px-4 py-1 rounded transition-colors ui-font text-sm font-medium ${
-                                            currentPart === part 
-                                            ? 'bg-white theme-text shadow' 
-                                            : 'text-white hover:bg-white/20'
-                                        }`}
-                                    >
-                                        {part.charAt(0).toUpperCase() + part.slice(1, 4) + " " + part.slice(4)}
-                                    </button>
-                                ))}
+                        <div className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
+                            <h1 className="text-xl font-bold ui-font tracking-wide whitespace-nowrap">Lesson 10 Reading Trainer</h1>
+                            
+                            <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto justify-end">
+                                {/* Part Buttons */}
+                                <div className="flex space-x-1 bg-black/10 p-1 rounded-lg">
+                                    {['part1', 'part2', 'part3'].map((part) => (
+                                        <button
+                                            key={part}
+                                            onClick={() => { setCurrentPart(part); window.scrollTo(0,0); }}
+                                            className={`px-3 py-1 rounded transition-colors ui-font text-sm font-medium ${
+                                                currentPart === part 
+                                                ? 'bg-white theme-text shadow' 
+                                                : 'text-white hover:bg-white/20'
+                                            }`}
+                                        >
+                                            {part.replace('part', 'Part ')}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Level Slider */}
+                                <div className="flex items-center space-x-3 bg-black/10 px-4 py-1.5 rounded-lg">
+                                    <span className="text-sm font-bold ui-font whitespace-nowrap w-12 text-center">Level {level}</span>
+                                    <input 
+                                        type="range" 
+                                        min="1" 
+                                        max="4" 
+                                        value={level} 
+                                        onChange={(e) => setLevel(parseInt(e.target.value))}
+                                        className="w-24 h-2 rounded-lg cursor-pointer header-slider"
+                                    />
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -357,30 +371,6 @@
                                         </div>
                                     ))}
                                 </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    {/* Control Panel */}
-                    <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-11/12 max-w-xl bg-white/95 backdrop-blur border border-gray-300 shadow-2xl rounded-2xl p-5 z-20 ui-font">
-                        <div className="flex flex-col space-y-3">
-                            <div className="flex justify-between items-center text-sm font-bold theme-text">
-                                <span>DIFFICULTY</span>
-                                <span className="theme-bg text-white px-3 py-1 rounded-full text-xs tracking-wider">{getLevelDescription(level)}</span>
-                            </div>
-                            <input 
-                                type="range" 
-                                min="1" 
-                                max="4" 
-                                value={level} 
-                                onChange={(e) => setLevel(parseInt(e.target.value))}
-                                className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer range-slider"
-                            />
-                            <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase tracking-widest px-1">
-                                <span>Full</span>
-                                <span>New Words</span>
-                                <span>Content Words</span>
-                                <span>Initials</span>
                             </div>
                         </div>
                     </div>
