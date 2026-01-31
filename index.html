@@ -8,6 +8,8 @@
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <!-- アイコン用 -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
     <style>
         /* Centuryフォントを優先指定 */
         body {
@@ -52,7 +54,7 @@
             font-weight: bold;
             transition: color 0.3s;
         }
-
+        
         /* 読み上げ可能な単語（カーソル変更） */
         .speakable-word {
             cursor: pointer;
@@ -61,7 +63,7 @@
             opacity: 0.7;
         }
 
-        /* スクロールバーのカスタマイズ (横スクロールを見やすく) */
+        /* スクロールバーのカスタマイズ */
         .custom-scrollbar::-webkit-scrollbar {
             height: 8px;
         }
@@ -76,13 +78,20 @@
         .custom-scrollbar::-webkit-scrollbar-thumb:hover {
             background: #aaa;
         }
+        
+        /* ボタンのアニメーション */
+        .active-play-btn {
+            background-color: #fef3c7 !important; /* amber-100 */
+            color: #d97706 !important; /* amber-600 */
+            border: 1px solid #f59e0b;
+        }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo, useCallback } = React;
+        const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
         // 教科書データ
         const lessonData = {
@@ -144,338 +153,351 @@
             ]
         };
 
-        // 新出語彙リスト
         const newWordsList = {
-            part1: [
-                "happened", "strongly", "tribe", "grade", "fitting", "bullied",
-                "came", "true", "ethnic", "childhood"
-            ],
-            part2: [
-                "violent", "continent", "avoid", "might", "behaved", "make-up", 
-                "attractive", "thought", "addition", "pass", "subjects"
-            ],
-            part3: [
-                "ethiopia", "luckily", "program", "expected", "amazon", 
-                "region", "featured", "well"
-            ]
+            part1: ["happened", "strongly", "tribe", "grade", "fitting", "bullied", "came", "true", "ethnic", "childhood"],
+            part2: ["violent", "continent", "avoid", "might", "behaved", "make-up", "attractive", "thought", "addition", "pass", "subjects"],
+            part3: ["ethiopia", "luckily", "program", "expected", "amazon", "region", "featured", "well"]
         };
 
-        // 機能語リスト
         const functionWords = new Set([
             "is", "am", "are", "was", "were", "be", "been", "being",
             "do", "does", "did", "have", "has", "had", 
             "will", "would", "can", "could", "shall", "should", "may", "might", "must",
-            "i", "you", "he", "she", "it", "we", "they",
-            "me", "him", "her", "us", "them",
-            "my", "your", "his", "its", "our", "their",
-            "mine", "yours", "hers", "ours", "theirs",
-            "this", "that", "these", "those",
-            "who", "which", "what", "where", "when", "why", "how",
-            "a", "an", "the",
-            "in", "on", "at", "to", "for", "from", "of", "with", "by", "about", 
+            "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them",
+            "my", "your", "his", "its", "our", "their", "mine", "yours", "hers", "ours", "theirs",
+            "this", "that", "these", "those", "who", "which", "what", "where", "when", "why", "how",
+            "a", "an", "the", "in", "on", "at", "to", "for", "from", "of", "with", "by", "about", 
             "as", "into", "like", "through", "after", "over", "between", "out", 
             "against", "during", "without", "before", "under", "around", "among",
             "and", "but", "or", "so", "because", "if", "while", "although", "though", "since",
             "not", "no", "yes", "there", "here"
         ]);
 
-        // 固有名詞リスト
         const properNouns = new Set([
             "Yoshida", "Nagi", "Africa", "African", "Masai", "TV", "Ethiopia", 
             "Suri", "Tribe", "Amazon", "Asian", "Earth"
         ]);
 
+        // Helpers
+        const isNewWord = (word, part) => {
+            const cleanWord = word.toLowerCase().replace(/^[^\w]+|[^\w]+$/g, '');
+            const targetList = newWordsList[part] || [];
+            return targetList.includes(cleanWord);
+        };
+        const isFunctionWord = (word) => {
+            const cleanWord = word.toLowerCase().replace(/^[^\w]+|[^\w]+$/g, '');
+            return functionWords.has(cleanWord);
+        };
+        const isProperNounOrNumber = (word) => {
+            const cleanWord = word.replace(/[^\w\d]/g, ''); 
+            if (/^\d+$/.test(cleanWord)) return true;
+            return properNouns.has(cleanWord);
+        };
+
         const App = () => {
             const [currentPart, setCurrentPart] = useState('part1');
             const [level, setLevel] = useState(1);
             const [revealedKeys, setRevealedKeys] = useState(new Set()); 
-            const [speakingRange, setSpeakingRange] = useState(null); // {start: number, end: number} 全体文字数での範囲
+            const [speakingRange, setSpeakingRange] = useState(null); 
+            const [isFullPlaying, setIsFullPlaying] = useState(false);
+            const [isPaused, setIsPaused] = useState(false);
+            const [voices, setVoices] = useState([]);
+            const [level3HiddenKeys, setLevel3HiddenKeys] = useState(new Set());
+            
+            // Ref for managing chained playback
+            const playbackRef = useRef({
+                sentences: [],
+                currentIndex: -1,
+                isPausedFlag: false // フラグを追加して意図しないリセットを防ぐ
+            });
 
-            // パートやレベルが変わったらリセット
+            // パートやレベルが変わったら停止
             useEffect(() => {
                 setRevealedKeys(new Set());
-                setSpeakingRange(null);
-                window.speechSynthesis.cancel();
+                stopPlayback();
             }, [currentPart, level]);
 
-            // 全文テキストと各行の開始インデックスを計算
-            const { fullText, lineStartIndices } = useMemo(() => {
+            useEffect(() => {
+                const loadVoices = () => { setVoices(window.speechSynthesis.getVoices()); };
+                loadVoices();
+                if (window.speechSynthesis.onvoiceschanged !== undefined) window.speechSynthesis.onvoiceschanged = loadVoices;
+            }, []);
+
+            // Data Analysis
+            const { fullText, lineStartIndices, sentencesList } = useMemo(() => {
                 const lines = lessonData[currentPart];
                 let currentLen = 0;
-                const indices = lines.map(line => {
+                let allTokens = [];
+                const indices = lines.map((line, lIdx) => {
                     const start = currentLen;
-                    currentLen += line.text.length + 1; // +1 for space joining
+                    const tokens = line.text.split(/(\s+|[.,;:"“”?!])/g);
+                    tokens.forEach((token, tIdx) => {
+                         if (token.trim() && !/^[.,;:"“”?!]+$/.test(token)) {
+                             allTokens.push({ text: token, lineIndex: lIdx, wordIndex: tIdx, key: `${lIdx}-${tIdx}` });
+                         }
+                    });
+                    currentLen += line.text.length + 1;
                     return start;
                 });
+
+                // Level 3 Logic
+                const hiddenSet = new Set();
+                let currentSentenceTokens = [];
+                let sentences = []; // For playback
+                
                 const text = lines.map(l => l.text).join(" ");
-                return { fullText: text, lineStartIndices: indices };
-            }, [currentPart]);
 
-            // トグル機能: 隠し単語の表示/非表示
-            const handleHiddenWordClick = (key) => {
-                setRevealedKeys(prev => {
-                    const newSet = new Set(prev);
-                    if (newSet.has(key)) {
-                        newSet.delete(key); // 既に表示なら隠す
-                    } else {
-                        newSet.add(key); // 隠れていれば表示
-                    }
-                    return newSet;
-                });
-            };
-
-            // 音声読み上げ: 文を特定して再生
-            const playSentence = (lineIndex, tokenIndexInLine, lineText) => {
-                // クリックされた単語の絶対位置(文字インデックス)を推定
-                // 厳密なトークナイズ位置が必要だが、簡易的に計算する
-                const tokens = lineText.split(/(\s+|[.,;:"“”?!])/g);
-                let charOffsetInLine = 0;
-                for (let i = 0; i < tokenIndexInLine; i++) {
-                    charOffsetInLine += tokens[i].length;
-                }
-                const absCharIndex = lineStartIndices[lineIndex] + charOffsetInLine;
-
-                // 文の範囲を特定 (正規表現で . ? ! の区切りを探す)
-                // 簡易ロジック: 文末記号+空白 または 行末 で区切る
                 const regex = /[^\.!\?]+[\.!\?]+(\s+|$)|[^\.!\?]+$/g;
                 let match;
-                let foundSentence = null;
-                let start = 0;
-                let end = 0;
-
-                while ((match = regex.exec(fullText)) !== null) {
+                while ((match = regex.exec(text)) !== null) {
                     const sStart = match.index;
                     const sEnd = match.index + match[0].length;
-                    if (absCharIndex >= sStart && absCharIndex < sEnd) {
-                        foundSentence = match[0].trim();
-                        start = sStart;
-                        end = sEnd;
-                        break;
+                    const trimmedText = match[0].trim();
+                    if(trimmedText) {
+                         sentences.push({ text: trimmedText, start: sStart, end: sEnd });
                     }
                 }
 
-                if (foundSentence) {
-                    window.speechSynthesis.cancel();
-                    const utterance = new SpeechSynthesisUtterance(foundSentence);
-                    utterance.lang = 'en-US';
-                    utterance.rate = 1.0;
-                    
-                    utterance.onstart = () => {
-                        setSpeakingRange({ start, end });
-                    };
-                    utterance.onend = () => {
-                        setSpeakingRange(null);
-                    };
-                    utterance.onerror = () => {
-                        setSpeakingRange(null);
-                    };
+                allTokens.forEach((tokenObj) => {
+                    currentSentenceTokens.push(tokenObj);
+                    const lineText = lines[tokenObj.lineIndex].text;
+                    const splitLine = lineText.split(/(\s+|[.,;:"“”?!])/g);
+                    const nextChar = splitLine[tokenObj.wordIndex + 1];
+                    const isSentenceEnd = nextChar && /[.?!]/.test(nextChar);
 
-                    window.speechSynthesis.speak(utterance);
+                    if (isSentenceEnd || currentSentenceTokens.length > 20) { 
+                        const newWordTokens = currentSentenceTokens.filter(t => isNewWord(t.text, currentPart));
+                        const contentWordTokens = currentSentenceTokens.filter(t => !isNewWord(t.text, currentPart) && !isFunctionWord(t.text) && !isProperNounOrNumber(t.text));
+                        let targets = [...newWordTokens];
+                        const targetCount = 4;
+                        if (targets.length < targetCount) {
+                            const shuffledContent = contentWordTokens.sort(() => 0.5 - Math.random());
+                            targets = targets.concat(shuffledContent.slice(0, targetCount - targets.length));
+                        }
+                        targets.forEach(t => hiddenSet.add(t.key));
+                        currentSentenceTokens = [];
+                    }
+                });
+                setLevel3HiddenKeys(hiddenSet);
+                
+                return { fullText: text, lineStartIndices: indices, sentencesList: sentences };
+            }, [currentPart]);
+
+            const handleHiddenWordClick = (key) => {
+                setRevealedKeys(prev => { const newSet = new Set(prev); if (newSet.has(key)) newSet.delete(key); else newSet.add(key); return newSet; });
+            };
+
+            const getPreferredVoice = () => {
+                if (voices.length === 0) return null;
+                return voices.find(v => v.name === 'Google US English') || voices.find(v => v.name.includes('Zira')) || voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en'));
+            };
+
+            // Playback Control
+            const stopPlayback = () => {
+                // フラグをクリアしてからキャンセル
+                playbackRef.current.isPausedFlag = false;
+                window.speechSynthesis.cancel();
+                setIsFullPlaying(false);
+                setIsPaused(false);
+                setSpeakingRange(null);
+                playbackRef.current.sentences = [];
+                playbackRef.current.currentIndex = -1;
+            };
+
+            const pausePlayback = () => {
+                if (isFullPlaying && !isPaused) {
+                    playbackRef.current.isPausedFlag = true; // フラグを立てる
+                    window.speechSynthesis.cancel(); 
+                    setIsPaused(true);
                 }
             };
-            
-            const isNewWord = (word, part) => {
-                const cleanWord = word.toLowerCase().replace(/^[^\w]+|[^\w]+$/g, '');
-                const targetList = newWordsList[part] || [];
-                return targetList.includes(cleanWord);
+
+            const playNextSentence = () => {
+                const { sentences, currentIndex, isPausedFlag } = playbackRef.current;
+                
+                // ポーズ中なら何もしない
+                if (isPausedFlag) return;
+
+                const nextIndex = currentIndex + 1;
+
+                if (nextIndex >= sentences.length) {
+                    stopPlayback();
+                    return;
+                }
+
+                playbackRef.current.currentIndex = nextIndex;
+                const sentence = sentences[nextIndex];
+                
+                setSpeakingRange({ start: sentence.start, end: sentence.end });
+
+                const utterance = new SpeechSynthesisUtterance(sentence.text);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.85; 
+                const voice = getPreferredVoice();
+                if (voice) utterance.voice = voice;
+
+                utterance.onend = () => {
+                    // ポーズフラグが立っていない場合のみ次へ
+                    if (!playbackRef.current.isPausedFlag) {
+                         playNextSentence();
+                    }
+                };
+                utterance.onerror = () => {
+                    // エラー時もポーズフラグが立っていなければ停止
+                    if (!playbackRef.current.isPausedFlag) {
+                        stopPlayback();
+                    }
+                };
+
+                window.speechSynthesis.speak(utterance);
             };
 
-            const isFunctionWord = (word) => {
-                const cleanWord = word.toLowerCase().replace(/^[^\w]+|[^\w]+$/g, '');
-                return functionWords.has(cleanWord);
+            const startOrResumePlayback = () => {
+                if (isFullPlaying && !isPaused) return; // Already playing
+
+                if (isPaused && playbackRef.current.sentences.length > 0) {
+                    // Resume
+                    playbackRef.current.isPausedFlag = false;
+                    setIsPaused(false);
+                    // 現在のインデックスを一つ戻して、再度 playNextSentence を呼ぶことで
+                    // インクリメントされ、元の位置から再生される
+                    playbackRef.current.currentIndex -= 1; 
+                    playNextSentence();
+                } else {
+                    // Start New
+                    stopPlayback(); 
+                    // 少し待ってから開始（キャンセル処理の確実化）
+                    setTimeout(() => {
+                        setIsFullPlaying(true);
+                        setIsPaused(false);
+                        playbackRef.current = {
+                            sentences: sentencesList,
+                            currentIndex: -1,
+                            isPausedFlag: false
+                        };
+                        playNextSentence();
+                    }, 50);
+                }
             };
 
-            const isProperNounOrNumber = (word) => {
-                const cleanWord = word.replace(/[^\w\d]/g, ''); 
-                if (/^\d+$/.test(cleanWord)) return true;
-                return properNouns.has(cleanWord);
+            const handleSentenceClick = (lineIndex, tokenIndexInLine, lineText) => {
+                if (isFullPlaying) return; 
+
+                const tokens = lineText.split(/(\s+|[.,;:"“”?!])/g);
+                let charOffsetInLine = 0;
+                for (let i = 0; i < tokenIndexInLine; i++) charOffsetInLine += tokens[i].length;
+                const absCharIndex = lineStartIndices[lineIndex] + charOffsetInLine;
+
+                const foundSentence = sentencesList.find(s => absCharIndex >= s.start && absCharIndex < s.end);
+
+                if (!foundSentence) return;
+
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(foundSentence.text);
+                utterance.lang = 'en-US';
+                utterance.rate = 0.85; 
+                const voice = getPreferredVoice();
+                if (voice) utterance.voice = voice;
+                utterance.onstart = () => setSpeakingRange({ start: foundSentence.start, end: foundSentence.end });
+                utterance.onend = () => setSpeakingRange(null);
+                utterance.onerror = () => setSpeakingRange(null);
+                window.speechSynthesis.speak(utterance);
             };
 
             const processText = (lineText, level, lineIndex) => {
                 const tokens = lineText.split(/(\s+|[.,;:"“”?!])/g);
                 let currentCharIndexInLine = 0;
-                
                 return tokens.map((token, i) => {
                     const key = `${lineIndex}-${i}`;
                     const isRevealed = revealedKeys.has(key);
                     const tokenLen = token.length;
-                    
-                    // 現在の単語の絶対位置(文頭から)
                     const absStart = lineStartIndices[lineIndex] + currentCharIndexInLine;
                     const absEnd = absStart + tokenLen;
                     currentCharIndexInLine += tokenLen;
+                    const isSpeaking = speakingRange && (absStart >= speakingRange.start && absEnd <= speakingRange.end);
 
-                    // 読み上げ中のハイライト判定
-                    const isSpeaking = speakingRange && 
-                                     (absStart >= speakingRange.start && absEnd <= speakingRange.end);
+                    if (!token.trim() || /^[.,;:"“”?!]+$/.test(token)) return <span key={i} className={isSpeaking ? "speaking-highlight" : ""}>{token}</span>;
 
-                    // 空白や記号
-                    if (!token.trim() || /^[.,;:"“”?!]+$/.test(token)) {
-                        return <span key={i} className={isSpeaking ? "speaking-highlight" : ""}>{token}</span>;
-                    }
+                    if (level === 1) return (<span key={i} onClick={() => handleSentenceClick(lineIndex, i, lineText)} className={`speakable-word ${isSpeaking ? "speaking-highlight" : ""}`}>{token}</span>);
 
-                    // Level 1: 全文表示 (音声再生可能)
-                    if (level === 1) {
-                        return (
-                            <span 
-                                key={i} 
-                                onClick={() => playSentence(lineIndex, i, lineText)}
-                                className={`speakable-word ${isSpeaking ? "speaking-highlight" : ""}`}
-                            >
-                                {token}
-                            </span>
-                        );
-                    }
+                    if (isRevealed) return (<span key={i} onClick={() => handleHiddenWordClick(key)} className="revealed-word mx-0.5" title="Click to hide">{token}</span>);
 
-                    // クリック済みなら強調表示 (再びクリックで隠す)
-                    if (isRevealed) {
-                        return (
-                            <span 
-                                key={i} 
-                                onClick={() => handleHiddenWordClick(key)}
-                                className="revealed-word mx-0.5"
-                                title="Click to hide"
-                            >
-                                {token}
-                            </span>
-                        );
-                    }
-
-                    // Level 2: 新出語彙隠し
                     if (level === 2) {
                         if (isNewWord(token, currentPart)) {
                             const firstChar = token.charAt(0);
                             const rest = token.slice(1).replace(/./g, '_');
-                            return (
-                                <span 
-                                    key={i} 
-                                    onClick={() => handleHiddenWordClick(key)}
-                                    className="hidden-word theme-text font-bold mx-0.5"
-                                    title="Click to reveal"
-                                >
-                                    {firstChar}<span className="text-gray-300 font-light tracking-widest">{rest}</span>
-                                </span>
-                            );
+                            return (<span key={i} onClick={() => handleHiddenWordClick(key)} className="hidden-word theme-text font-bold mx-0.5">{firstChar}<span className="text-gray-300 font-light tracking-widest">{rest}</span></span>);
                         }
-                        return (
-                            <span 
-                                key={i} 
-                                onClick={() => playSentence(lineIndex, i, lineText)}
-                                className={`speakable-word ${isSpeaking ? "speaking-highlight" : ""}`}
-                            >
-                                {token}
-                            </span>
-                        );
+                        return (<span key={i} onClick={() => handleSentenceClick(lineIndex, i, lineText)} className={`speakable-word ${isSpeaking ? "speaking-highlight" : ""}`}>{token}</span>);
                     }
 
-                    // Level 3: 内容語隠し
                     if (level === 3) {
-                         if (isFunctionWord(token) || isProperNounOrNumber(token)) {
-                             // 表示されている語は読み上げ可能
-                             return (
-                                <span 
-                                    key={i} 
-                                    onClick={() => playSentence(lineIndex, i, lineText)}
-                                    className={`speakable-word ${isSpeaking ? "speaking-highlight" : ""}`}
-                                >
-                                    {token}
-                                </span>
-                             );
+                         if (level3HiddenKeys.has(key)) {
+                             const firstChar = token.charAt(0);
+                             const rest = token.slice(1).replace(/./g, '_');
+                             return (<span key={i} onClick={() => handleHiddenWordClick(key)} className="hidden-word theme-text font-bold mx-0.5">{firstChar}<span className="text-gray-300 font-light tracking-widest">{rest}</span></span>);
                          }
-                         const firstChar = token.charAt(0);
-                         const rest = token.slice(1).replace(/./g, '_');
-                         return (
-                            <span 
-                                key={i} 
-                                onClick={() => handleHiddenWordClick(key)}
-                                className="hidden-word theme-text font-bold mx-0.5"
-                                title="Click to reveal"
-                            >
-                                {firstChar}<span className="text-gray-300 font-light tracking-widest">{rest}</span>
-                            </span>
-                         );
+                         return (<span key={i} onClick={() => handleSentenceClick(lineIndex, i, lineText)} className={`speakable-word ${isSpeaking ? "speaking-highlight" : ""}`}>{token}</span>);
                     }
 
-                    // Level 4: 全単語頭文字
                     if (level === 4) {
                         const firstChar = token.charAt(0);
                         const rest = token.slice(1).replace(/./g, '_');
-                        return (
-                            <span 
-                                key={i} 
-                                onClick={() => handleHiddenWordClick(key)}
-                                className="hidden-word theme-text font-bold mx-0.5"
-                                title="Click to reveal"
-                            >
-                                {firstChar}<span className="text-gray-300 font-light tracking-widest">{rest}</span>
-                            </span>
-                        );
+                        return (<span key={i} onClick={() => handleHiddenWordClick(key)} className="hidden-word theme-text font-bold mx-0.5">{firstChar}<span className="text-gray-300 font-light tracking-widest">{rest}</span></span>);
                     }
                 });
             };
 
             return (
                 <div className="min-h-screen flex flex-col items-center">
-                    {/* Header */}
-                    <div className="w-full theme-bg text-white p-4 shadow-md sticky top-0 z-10">
-                        <div className="max-w-4xl mx-auto flex flex-col md:flex-row justify-between items-center gap-4">
-                            <h1 className="text-xl font-bold ui-font tracking-wide whitespace-nowrap">Lesson 10 Reading Trainer</h1>
-                            
-                            <div className="flex flex-col sm:flex-row items-center gap-4 w-full md:w-auto justify-end">
-                                {/* Part Buttons */}
+                    <div className="w-full theme-bg text-white p-3 shadow-md sticky top-0 z-10">
+                        <div className="max-w-5xl mx-auto flex flex-col md:flex-row justify-between items-center gap-3">
+                            <h1 className="text-lg font-bold ui-font tracking-wide whitespace-nowrap flex items-center"><i className="fas fa-book-open mr-2"></i> Lesson 10 Reading Trainer</h1>
+                            <div className="flex flex-wrap items-center gap-2 justify-center md:justify-end w-full">
                                 <div className="flex space-x-1 bg-black/10 p-1 rounded-lg">
-                                    {['part1', 'part2', 'part3'].map((part) => (
-                                        <button
-                                            key={part}
-                                            onClick={() => { setCurrentPart(part); window.scrollTo(0,0); }}
-                                            className={`px-3 py-1 rounded transition-colors ui-font text-sm font-medium ${
-                                                currentPart === part 
-                                                ? 'bg-white theme-text shadow' 
-                                                : 'text-white hover:bg-white/20'
-                                            }`}
-                                        >
-                                            {part.replace('part', 'Part ')}
-                                        </button>
-                                    ))}
+                                    {['part1', 'part2', 'part3'].map((part) => (<button key={part} onClick={() => { setCurrentPart(part); window.scrollTo(0,0); }} className={`px-3 py-1 rounded transition-colors ui-font text-xs font-medium ${currentPart === part ? 'bg-white theme-text shadow' : 'text-white hover:bg-white/20'}`}>{part.replace('part', 'Part ')}</button>))}
                                 </div>
-
-                                {/* Level Buttons (Slider replaced) */}
                                 <div className="flex space-x-1 bg-black/10 p-1 rounded-lg">
-                                    {[1, 2, 3, 4].map((lvl) => (
-                                        <button
-                                            key={lvl}
-                                            onClick={() => setLevel(lvl)}
-                                            className={`px-3 py-1 rounded transition-colors ui-font text-sm font-medium ${
-                                                level === lvl 
-                                                ? 'bg-white theme-text shadow' 
-                                                : 'text-white hover:bg-white/20'
-                                            }`}
-                                        >
-                                            Level {lvl}
-                                        </button>
-                                    ))}
+                                    {[1, 2, 3, 4].map((lvl) => (<button key={lvl} onClick={() => setLevel(lvl)} className={`px-3 py-1 rounded transition-colors ui-font text-xs font-medium ${level === lvl ? 'bg-white theme-text shadow' : 'text-white hover:bg-white/20'}`}>Lv.{lvl}</button>))}
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    {/* Main Text Area */}
-                    <div className="flex-grow w-full max-w-4xl px-4 py-8 overflow-hidden">
-                        <div className="bg-white rounded-xl shadow-lg border-t-8 theme-border p-6 md:p-12 min-h-[60vh]">
-                            <h2 className="theme-text text-sm font-bold uppercase tracking-widest mb-6 border-b border-gray-200 pb-2 ui-font flex justify-between items-center">
-                                <span>Being Different Is Beautiful - {currentPart.replace('part', 'Part ')}</span>
-                                <span className="text-xs text-gray-400 font-normal normal-case">
-                                    Click words to read/reveal
-                                </span>
+                    <div className="flex-grow w-full max-w-5xl px-4 py-8 overflow-hidden">
+                        <div className="bg-white rounded-xl shadow-lg border-t-8 p-6 md:p-12 min-h-[60vh] theme-border">
+                            <h2 className="theme-text text-sm font-bold uppercase tracking-widest mb-6 border-b border-gray-200 pb-2 ui-font flex justify-between items-center gap-2">
+                                <span className="truncate">Being Different Is Beautiful - {currentPart.replace('part', 'Part ')}</span>
+                                <div className="flex space-x-2 flex-shrink-0">
+                                    <button 
+                                        onClick={startOrResumePlayback} 
+                                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isFullPlaying && !isPaused ? 'active-play-btn' : 'bg-teal-50 text-teal-700 hover:bg-teal-100'}`}
+                                        title="Play"
+                                    >
+                                        <i className="fas fa-play"></i>
+                                    </button>
+                                    <button 
+                                        onClick={pausePlayback}
+                                        disabled={!isFullPlaying || isPaused}
+                                        className={`w-10 h-10 rounded-full flex items-center justify-center transition-all ${isPaused ? 'bg-gray-200 text-gray-400' : 'bg-teal-50 text-teal-700 hover:bg-teal-100 disabled:opacity-50'}`}
+                                        title="Pause"
+                                    >
+                                        <i className="fas fa-pause"></i>
+                                    </button>
+                                    <button 
+                                        onClick={stopPlayback}
+                                        disabled={!isFullPlaying && !isPaused}
+                                        className="w-10 h-10 rounded-full flex items-center justify-center transition-all bg-gray-100 text-gray-500 hover:bg-gray-200 hover:text-red-500 disabled:opacity-50"
+                                        title="Stop"
+                                    >
+                                        <i className="fas fa-stop"></i>
+                                    </button>
+                                </div>
                             </h2>
-                            {/* 横スクロール可能なコンテナ */}
                             <div className="text-2xl md:text-3xl leading-[2.0] text-gray-800 overflow-x-auto custom-scrollbar pb-4">
                                 <div className="min-w-max">
                                     {lessonData[currentPart].map((line, index) => (
-                                        <div 
-                                            key={index} 
-                                            className={`mb-4 min-h-[1.5em] whitespace-nowrap ${line.indent ? 'pl-8' : ''}`}
-                                        >
+                                        <div key={index} className={`mb-4 min-h-[1.5em] whitespace-nowrap ${line.indent ? 'pl-8' : ''}`}>
                                             {processText(line.text, level, index)}
                                         </div>
                                     ))}
