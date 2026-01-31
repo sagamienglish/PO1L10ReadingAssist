@@ -289,7 +289,15 @@
 
             const getPreferredVoice = () => {
                 if (voices.length === 0) return null;
-                return voices.find(v => v.name === 'Google US English') || voices.find(v => v.name.includes('Zira')) || voices.find(v => v.lang === 'en-US') || voices.find(v => v.lang.startsWith('en'));
+                // iOS/Mac向けの高品質音声を優先リストに追加
+                return voices.find(v => v.name === 'Google US English') ||
+                       voices.find(v => v.name === 'Samantha') ||          // iOS/Mac (US) - High Quality
+                       voices.find(v => v.name === 'Daniel') ||            // iOS/Mac (UK) - High Quality
+                       voices.find(v => v.name === 'Karen') ||             // iOS/Mac (AU)
+                       voices.find(v => v.name.includes('Siri')) ||        // Siri Voices (if accessible)
+                       voices.find(v => v.name.includes('Zira')) ||        // Windows
+                       voices.find(v => v.lang === 'en-US') ||
+                       voices.find(v => v.lang.startsWith('en'));
             };
 
             // Playback Control
