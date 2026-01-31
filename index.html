@@ -1,0 +1,373 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lesson 10 Reading Trainer</title>
+    <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Centuryフォントを優先指定 */
+        body {
+            font-family: 'Century', 'Times New Roman', serif;
+            background-color: #f4f7f6;
+            color: #333;
+        }
+        /* 日本語部分（UIなど）は見やすくゴシック体 */
+        .ui-font {
+            font-family: "Hiragino Kaku Gothic ProN", "Hiragino Sans", Meiryo, sans-serif;
+        }
+        
+        /* 教科書テーマカラー (画像から抽出した青緑) */
+        .theme-bg {
+            background-color: #3EA39E; 
+        }
+        .theme-text {
+            color: #2D7A76; /* 文字用に少し暗く調整 */
+        }
+        .theme-border {
+            border-color: #3EA39E;
+        }
+        
+        .range-slider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            appearance: none;
+            width: 24px;
+            height: 24px;
+            background: #3EA39E;
+            cursor: pointer;
+            border-radius: 50%;
+            border: 2px solid white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+        }
+
+        /* 隠れた単語のスタイル */
+        .hidden-word {
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .hidden-word:hover {
+            opacity: 0.8;
+        }
+        /* クリックして表示された単語のスタイル */
+        .revealed-word {
+            color: #d97706; /* 琥珀色で強調 */
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect } = React;
+
+        // 教科書データ
+        const lessonData = {
+            part1: [
+                "Yoshida Nagi is a unique photographer. She often",
+                "takes pictures in Africa and other places around the",
+                "world.",
+                "Yoshida became interested in African ethnic groups",
+                "when she was five years old. She happened to see the",
+                "Masai people, one of the ethnic groups in Africa, on TV.",
+                "She did not know why, but she became strongly attracted",
+                "to the Masai. She even thought, \"I wish I were a member",
+                "of their tribe.\" Soon after that, going to Africa became",
+                "one of her dreams.",
+                "She stopped going to junior high school in second",
+                "grade because she had trouble fitting in. In fact, she was",
+                "bullied in both elementary and junior high schools. After",
+                "leaving school, she worked for several years and saved",
+                "money. Her childhood dream came true in 2009, when",
+                "she was 23 years old. She finally visited Africa."
+            ],
+            part2: [
+                "Why did Yoshida begin taking photos? She wanted to",
+                "show that Africa and the people there were attractive.",
+                "Almost everyone around her thought of Africa as a",
+                "hungry, poor, and violent place. She thought photos",
+                "would help them understand the continent better.",
+                "In addition, she wanted to take photos of African",
+                "people in their traditional costumes. Nowadays, some",
+                "young people in the ethnic groups avoid wearing their",
+                "traditional clothes. She believes that taking photos of",
+                "people in their clothes might help pass their traditions on",
+                "to following generations.",
+                "However, it was difficult to take good photos at first.",
+                "\"The trust between a photographer and their subjects is",
+                "important,\" says Yoshida. \"If they don't trust a photographer,",
+                "they will not show who or what they really are.\"",
+                "To gain their trust, she behaved as if she were an",
+                "African woman. She wore the same costume, ate the same",
+                "meals, and put on the same make-up. This led to her success."
+            ],
+            part3: [
+                "Look at the left photo above. This photo, which",
+                "Yoshida took in 2015, changed her life. It is a photo of",
+                "people who belong to the Suri Tribe in Ethiopia. Luckily, it",
+                "was featured in a TV program that year, and it made her",
+                "famous. Although she had not expected to become a",
+                "photographer, she ended up becoming a professional one.",
+                "So far, she has taken pictures of more than 200 ethnic",
+                "groups in Africa. Now, she takes pictures of people around",
+                "the world who look beautiful to her. For example, she has",
+                "been to the Amazon region, as well as several Asian",
+                "countries.",
+                "Why do people in Yoshida's pictures look beautiful?",
+                "She seems to bring out the beauty in people everywhere.",
+                "Yoshida says, \"Being different is one of the most beautiful",
+                "things on Earth. If we were all the same, the world would",
+                "be boring.\""
+            ]
+        };
+
+        // 新出語彙リスト
+        const newWordsList = {
+            part1: [
+                "happened", "strongly", "tribe", "grade", "fitting", "bullied",
+                "came", "true", "ethnic", "childhood"
+            ],
+            part2: [
+                "violent", "continent", "avoid", "might", "behaved", "make-up", 
+                "attractive", "thought", "addition", "pass", "subjects"
+            ],
+            part3: [
+                "ethiopia", "luckily", "program", "expected", "amazon", 
+                "region", "featured", "well"
+            ]
+        };
+
+        // 機能語リスト (Function Words) - これらは隠さない
+        const functionWords = new Set([
+            "is", "am", "are", "was", "were", "be", "been", "being",
+            "do", "does", "did", "have", "has", "had", 
+            "will", "would", "can", "could", "shall", "should", "may", "might", "must",
+            "i", "you", "he", "she", "it", "we", "they",
+            "me", "him", "her", "us", "them",
+            "my", "your", "his", "its", "our", "their",
+            "mine", "yours", "hers", "ours", "theirs",
+            "this", "that", "these", "those",
+            "who", "which", "what", "where", "when", "why", "how",
+            "a", "an", "the",
+            "in", "on", "at", "to", "for", "from", "of", "with", "by", "about", 
+            "as", "into", "like", "through", "after", "over", "between", "out", 
+            "against", "during", "without", "before", "under", "around", "among",
+            "and", "but", "or", "so", "because", "if", "while", "although", "though", "since",
+            "not", "no", "yes", "there", "here"
+        ]);
+
+        // 固有名詞リスト (これらはLevel 3で隠さない)
+        const properNouns = new Set([
+            "Yoshida", "Nagi", "Africa", "African", "Masai", "TV", "Ethiopia", 
+            "Suri", "Tribe", "Amazon", "Asian", "Earth"
+        ]);
+
+        const App = () => {
+            const [currentPart, setCurrentPart] = useState('part1');
+            const [level, setLevel] = useState(1);
+            const [revealedKeys, setRevealedKeys] = useState(new Set()); // クリックして表示された単語のキー
+
+            // パートやレベルが変わったら、表示済み状態をリセット
+            useEffect(() => {
+                setRevealedKeys(new Set());
+            }, [currentPart, level]);
+
+            // 単語クリック時のハンドラ
+            const handleWordClick = (key) => {
+                setRevealedKeys(prev => {
+                    const newSet = new Set(prev);
+                    if (newSet.has(key)) {
+                        // 既に表示されているなら隠す（トグルする場合）
+                        // newSet.delete(key); 
+                        // 今回は「見えるようにする」なので、一度見えたらそのままの方が学習に良いかも
+                    } else {
+                        newSet.add(key);
+                    }
+                    return newSet;
+                });
+            };
+            
+            // 単語判定関数群
+            const isNewWord = (word, part) => {
+                const cleanWord = word.toLowerCase().replace(/^[^\w]+|[^\w]+$/g, '');
+                const targetList = newWordsList[part] || [];
+                return targetList.includes(cleanWord);
+            };
+
+            const isFunctionWord = (word) => {
+                const cleanWord = word.toLowerCase().replace(/^[^\w]+|[^\w]+$/g, '');
+                return functionWords.has(cleanWord);
+            };
+
+            const isProperNounOrNumber = (word) => {
+                const cleanWord = word.replace(/[^\w\d]/g, ''); // 記号除去
+                // 数字のみ、または固有名詞リストに含まれるか
+                if (/^\d+$/.test(cleanWord)) return true;
+                return properNouns.has(cleanWord);
+            };
+
+            const processText = (line, level, lineIndex) => {
+                const tokens = line.split(/(\s+|[.,;:"“”?!])/g);
+                
+                return tokens.map((token, i) => {
+                    const key = `${lineIndex}-${i}`; // 一意のキー
+                    const isRevealed = revealedKeys.has(key);
+
+                    // 空白や記号はそのまま表示
+                    if (!token.trim() || /^[.,;:"“”?!]+$/.test(token)) {
+                        return <span key={i}>{token}</span>;
+                    }
+
+                    // Level 1: 全文表示
+                    if (level === 1) {
+                        return <span key={i}>{token}</span>;
+                    }
+
+                    // クリック済みなら強調表示
+                    if (isRevealed) {
+                        return <span key={i} className="revealed-word mx-0.5">{token}</span>;
+                    }
+
+                    // Level 2: 新出語彙のみ隠す（頭文字ヒント）
+                    if (level === 2) {
+                        if (isNewWord(token, currentPart)) {
+                            const firstChar = token.charAt(0);
+                            const rest = token.slice(1).replace(/./g, '_');
+                            return (
+                                <span 
+                                    key={i} 
+                                    onClick={() => handleWordClick(key)}
+                                    className="hidden-word theme-text font-bold mx-0.5"
+                                    title="Click to reveal"
+                                >
+                                    {firstChar}<span className="text-gray-300 font-light tracking-widest">{rest}</span>
+                                </span>
+                            );
+                        }
+                        return <span key={i}>{token}</span>;
+                    }
+
+                    // Level 3: 内容語のみ隠す（機能語、固有名詞、数字は表示）+ 頭文字ヒント
+                    if (level === 3) {
+                         // 機能語 OR 固有名詞/数字 ならそのまま表示
+                         if (isFunctionWord(token) || isProperNounOrNumber(token)) {
+                             return <span key={i}>{token}</span>;
+                         }
+                         // それ以外（一般的な内容語）なら隠す
+                         const firstChar = token.charAt(0);
+                         const rest = token.slice(1).replace(/./g, '_');
+                         return (
+                            <span 
+                                key={i} 
+                                onClick={() => handleWordClick(key)}
+                                className="hidden-word theme-text font-bold mx-0.5"
+                                title="Click to reveal"
+                            >
+                                {firstChar}<span className="text-gray-300 font-light tracking-widest">{rest}</span>
+                            </span>
+                         );
+                    }
+
+                    // Level 4: 全単語の頭文字のみ表示
+                    if (level === 4) {
+                        const firstChar = token.charAt(0);
+                        const rest = token.slice(1).replace(/./g, '_');
+                        return (
+                            <span 
+                                key={i} 
+                                onClick={() => handleWordClick(key)}
+                                className="hidden-word theme-text font-bold mx-0.5"
+                                title="Click to reveal"
+                            >
+                                {firstChar}<span className="text-gray-300 font-light tracking-widest">{rest}</span>
+                            </span>
+                        );
+                    }
+                });
+            };
+
+            const getLevelDescription = (lvl) => {
+                switch(lvl) {
+                    case 1: return "Level 1: 全文表示";
+                    case 2: return "Level 2: 新出語彙 (頭文字)";
+                    case 3: return "Level 3: 内容語隠し";
+                    case 4: return "Level 4: 頭文字のみ (全文)";
+                    default: return "";
+                }
+            };
+
+            return (
+                <div className="min-h-screen flex flex-col items-center pb-24">
+                    {/* Header */}
+                    <div className="w-full theme-bg text-white p-4 shadow-md sticky top-0 z-10">
+                        <div className="max-w-3xl mx-auto flex flex-col md:flex-row justify-between items-center">
+                            <h1 className="text-xl font-bold mb-2 md:mb-0 ui-font tracking-wide">Lesson 10 Reading Trainer</h1>
+                            <div className="flex space-x-2 bg-black/10 p-1 rounded-lg">
+                                {['part1', 'part2', 'part3'].map((part) => (
+                                    <button
+                                        key={part}
+                                        onClick={() => { setCurrentPart(part); window.scrollTo(0,0); }}
+                                        className={`px-4 py-1 rounded transition-colors ui-font text-sm font-medium ${
+                                            currentPart === part 
+                                            ? 'bg-white theme-text shadow' 
+                                            : 'text-white hover:bg-white/20'
+                                        }`}
+                                    >
+                                        {part.charAt(0).toUpperCase() + part.slice(1, 4) + " " + part.slice(4)}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Main Text Area */}
+                    <div className="flex-grow w-full max-w-3xl px-6 py-8">
+                        <div className="bg-white rounded-xl shadow-lg border-t-8 theme-border p-8 md:p-12 min-h-[60vh]">
+                            <h2 className="theme-text text-sm font-bold uppercase tracking-widest mb-6 border-b border-gray-200 pb-2 ui-font">
+                                Being Different Is Beautiful - {currentPart.replace('part', 'Part ')}
+                            </h2>
+                            <div className="text-2xl md:text-3xl leading-[2.0] text-gray-800">
+                                {lessonData[currentPart].map((line, index) => (
+                                    <div key={index} className="mb-4 min-h-[1.5em] break-words">
+                                        {processText(line, level, index)}
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    </div>
+
+                    {/* Control Panel */}
+                    <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-11/12 max-w-xl bg-white/95 backdrop-blur border border-gray-300 shadow-2xl rounded-2xl p-5 z-20 ui-font">
+                        <div className="flex flex-col space-y-3">
+                            <div className="flex justify-between items-center text-sm font-bold theme-text">
+                                <span>DIFFICULTY</span>
+                                <span className="theme-bg text-white px-3 py-1 rounded-full text-xs tracking-wider">{getLevelDescription(level)}</span>
+                            </div>
+                            <input 
+                                type="range" 
+                                min="1" 
+                                max="4" 
+                                value={level} 
+                                onChange={(e) => setLevel(parseInt(e.target.value))}
+                                className="w-full h-2 bg-gray-300 rounded-lg appearance-none cursor-pointer range-slider"
+                            />
+                            <div className="flex justify-between text-[10px] text-gray-500 font-bold uppercase tracking-widest px-1">
+                                <span>Full</span>
+                                <span>New Words</span>
+                                <span>Content Words</span>
+                                <span>Initials</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+    </script>
+</body>
+</html>
