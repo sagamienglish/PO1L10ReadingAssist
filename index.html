@@ -56,6 +56,22 @@
             color: #d97706; /* 琥珀色で強調 */
             font-weight: bold;
         }
+
+        /* スクロールバーのカスタマイズ (横スクロールを見やすく) */
+        .custom-scrollbar::-webkit-scrollbar {
+            height: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #ccc;
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: #aaa;
+        }
     </style>
 </head>
 <body>
@@ -64,63 +80,63 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // 教科書データ
+        // 教科書データ (インデント情報を含むオブジェクト配列に変更)
         const lessonData = {
             part1: [
-                "Yoshida Nagi is a unique photographer. She often",
-                "takes pictures in Africa and other places around the",
-                "world.",
-                "Yoshida became interested in African ethnic groups",
-                "when she was five years old. She happened to see the",
-                "Masai people, one of the ethnic groups in Africa, on TV.",
-                "She did not know why, but she became strongly attracted",
-                "to the Masai. She even thought, \"I wish I were a member",
-                "of their tribe.\" Soon after that, going to Africa became",
-                "one of her dreams.",
-                "She stopped going to junior high school in second",
-                "grade because she had trouble fitting in. In fact, she was",
-                "bullied in both elementary and junior high schools. After",
-                "leaving school, she worked for several years and saved",
-                "money. Her childhood dream came true in 2009, when",
-                "she was 23 years old. She finally visited Africa."
+                { text: "Yoshida Nagi is a unique photographer. She often", indent: true },
+                { text: "takes pictures in Africa and other places around the", indent: false },
+                { text: "world.", indent: false },
+                { text: "Yoshida became interested in African ethnic groups", indent: true },
+                { text: "when she was five years old. She happened to see the", indent: false },
+                { text: "Masai people, one of the ethnic groups in Africa, on TV.", indent: false },
+                { text: "She did not know why, but she became strongly attracted", indent: false },
+                { text: "to the Masai. She even thought, \"I wish I were a member", indent: false },
+                { text: "of their tribe.\" Soon after that, going to Africa became", indent: false },
+                { text: "one of her dreams.", indent: false },
+                { text: "She stopped going to junior high school in second", indent: true },
+                { text: "grade because she had trouble fitting in. In fact, she was", indent: false },
+                { text: "bullied in both elementary and junior high schools. After", indent: false },
+                { text: "leaving school, she worked for several years and saved", indent: false },
+                { text: "money. Her childhood dream came true in 2009, when", indent: false },
+                { text: "she was 23 years old. She finally visited Africa.", indent: false }
             ],
             part2: [
-                "Why did Yoshida begin taking photos? She wanted to",
-                "show that Africa and the people there were attractive.",
-                "Almost everyone around her thought of Africa as a",
-                "hungry, poor, and violent place. She thought photos",
-                "would help them understand the continent better.",
-                "In addition, she wanted to take photos of African",
-                "people in their traditional costumes. Nowadays, some",
-                "young people in the ethnic groups avoid wearing their",
-                "traditional clothes. She believes that taking photos of",
-                "people in their clothes might help pass their traditions on",
-                "to following generations.",
-                "However, it was difficult to take good photos at first.",
-                "\"The trust between a photographer and their subjects is",
-                "important,\" says Yoshida. \"If they don't trust a photographer,",
-                "they will not show who or what they really are.\"",
-                "To gain their trust, she behaved as if she were an",
-                "African woman. She wore the same costume, ate the same",
-                "meals, and put on the same make-up. This led to her success."
+                { text: "Why did Yoshida begin taking photos? She wanted to", indent: true },
+                { text: "show that Africa and the people there were attractive.", indent: false },
+                { text: "Almost everyone around her thought of Africa as a", indent: false },
+                { text: "hungry, poor, and violent place. She thought photos", indent: false },
+                { text: "would help them understand the continent better.", indent: false },
+                { text: "In addition, she wanted to take photos of African", indent: true },
+                { text: "people in their traditional costumes. Nowadays, some", indent: false },
+                { text: "young people in the ethnic groups avoid wearing their", indent: false },
+                { text: "traditional clothes. She believes that taking photos of", indent: false },
+                { text: "people in their clothes might help pass their traditions on", indent: false },
+                { text: "to following generations.", indent: false },
+                { text: "However, it was difficult to take good photos at first.", indent: true },
+                { text: "\"The trust between a photographer and their subjects is", indent: false },
+                { text: "important,\" says Yoshida. \"If they don't trust a photographer,", indent: false },
+                { text: "they will not show who or what they really are.\"", indent: false },
+                { text: "To gain their trust, she behaved as if she were an", indent: true },
+                { text: "African woman. She wore the same costume, ate the same", indent: false },
+                { text: "meals, and put on the same make-up. This led to her success.", indent: false }
             ],
             part3: [
-                "Look at the left photo above. This photo, which",
-                "Yoshida took in 2015, changed her life. It is a photo of",
-                "people who belong to the Suri Tribe in Ethiopia. Luckily, it",
-                "was featured in a TV program that year, and it made her",
-                "famous. Although she had not expected to become a",
-                "photographer, she ended up becoming a professional one.",
-                "So far, she has taken pictures of more than 200 ethnic",
-                "groups in Africa. Now, she takes pictures of people around",
-                "the world who look beautiful to her. For example, she has",
-                "been to the Amazon region, as well as several Asian",
-                "countries.",
-                "Why do people in Yoshida's pictures look beautiful?",
-                "She seems to bring out the beauty in people everywhere.",
-                "Yoshida says, \"Being different is one of the most beautiful",
-                "things on Earth. If we were all the same, the world would",
-                "be boring.\""
+                { text: "Look at the left photo above. This photo, which", indent: true },
+                { text: "Yoshida took in 2015, changed her life. It is a photo of", indent: false },
+                { text: "people who belong to the Suri Tribe in Ethiopia. Luckily, it", indent: false },
+                { text: "was featured in a TV program that year, and it made her", indent: false },
+                { text: "famous. Although she had not expected to become a", indent: false },
+                { text: "photographer, she ended up becoming a professional one.", indent: false },
+                { text: "So far, she has taken pictures of more than 200 ethnic", indent: true },
+                { text: "groups in Africa. Now, she takes pictures of people around", indent: false },
+                { text: "the world who look beautiful to her. For example, she has", indent: false },
+                { text: "been to the Amazon region, as well as several Asian", indent: false },
+                { text: "countries.", indent: false },
+                { text: "Why do people in Yoshida's pictures look beautiful?", indent: true },
+                { text: "She seems to bring out the beauty in people everywhere.", indent: false },
+                { text: "Yoshida says, \"Being different is one of the most beautiful", indent: false },
+                { text: "things on Earth. If we were all the same, the world would", indent: false },
+                { text: "be boring.\"", indent: false }
             ]
         };
 
@@ -209,8 +225,8 @@
                 return properNouns.has(cleanWord);
             };
 
-            const processText = (line, level, lineIndex) => {
-                const tokens = line.split(/(\s+|[.,;:"“”?!])/g);
+            const processText = (lineText, level, lineIndex) => {
+                const tokens = lineText.split(/(\s+|[.,;:"“”?!])/g);
                 
                 return tokens.map((token, i) => {
                     const key = `${lineIndex}-${i}`; // 一意のキー
@@ -324,17 +340,23 @@
                     </div>
 
                     {/* Main Text Area */}
-                    <div className="flex-grow w-full max-w-3xl px-6 py-8">
-                        <div className="bg-white rounded-xl shadow-lg border-t-8 theme-border p-8 md:p-12 min-h-[60vh]">
+                    <div className="flex-grow w-full max-w-4xl px-4 py-8 overflow-hidden">
+                        <div className="bg-white rounded-xl shadow-lg border-t-8 theme-border p-6 md:p-12 min-h-[60vh]">
                             <h2 className="theme-text text-sm font-bold uppercase tracking-widest mb-6 border-b border-gray-200 pb-2 ui-font">
                                 Being Different Is Beautiful - {currentPart.replace('part', 'Part ')}
                             </h2>
-                            <div className="text-2xl md:text-3xl leading-[2.0] text-gray-800">
-                                {lessonData[currentPart].map((line, index) => (
-                                    <div key={index} className="mb-4 min-h-[1.5em] break-words">
-                                        {processText(line, level, index)}
-                                    </div>
-                                ))}
+                            {/* 横スクロール可能なコンテナ */}
+                            <div className="text-2xl md:text-3xl leading-[2.0] text-gray-800 overflow-x-auto custom-scrollbar pb-4">
+                                <div className="min-w-max">
+                                    {lessonData[currentPart].map((line, index) => (
+                                        <div 
+                                            key={index} 
+                                            className={`mb-4 min-h-[1.5em] whitespace-nowrap ${line.indent ? 'pl-8' : ''}`}
+                                        >
+                                            {processText(line.text, level, index)}
+                                        </div>
+                                    ))}
+                                </div>
                             </div>
                         </div>
                     </div>
