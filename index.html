@@ -200,48 +200,30 @@
         const VoiceSettingsModal = ({ isOpen, onClose, voices, selectedVoiceURI, onSelectVoice }) => {
             if (!isOpen) return null;
             
-            // 優先したい音声名のリスト
+            // ユーザー指定の厳選リスト
             const preferredNames = [
-                'Google US English', 
                 'Samantha', // iOS default High Quality
                 'Daniel',   // iOS UK
-                'Arthur', 
-                'Martha', 
-                'Karen', 
-                'Microsoft Zira'
+                'Karen'     // iOS AU
             ];
 
             // 厳選ロジック
             let curatedVoices = [];
             
-            // 1. 優先リストにあるものを探す
+            // 優先リストにあるものを探す
             preferredNames.forEach(name => {
                 const found = voices.find(v => v.name.includes(name));
                 if (found) curatedVoices.push(found);
             });
 
-            // 2. もし優先リストのものが少なすぎたら、他の英語音声を追加して5つくらいにする
-            if (curatedVoices.length < 5) {
-                const otherEnglish = voices.filter(v => 
-                    v.lang.startsWith('en') && 
-                    !curatedVoices.includes(v) &&
-                    !v.name.includes('Fred') && // Fredなどは特殊すぎるので除外
-                    !v.name.includes('Albert')
-                );
-                
-                // US/UKを優先して追加
-                otherEnglish.sort((a, b) => {
-                    if (a.lang === 'en-US' && b.lang !== 'en-US') return -1;
-                    if (a.lang === 'en-GB' && b.lang !== 'en-GB') return -1;
-                    return 0;
-                });
-
-                // 足りない分を追加
-                curatedVoices = [...curatedVoices, ...otherEnglish.slice(0, 6 - curatedVoices.length)];
+            // もし指定の音声が一つも見つからない場合のフォールバック（何も出ないのを防ぐため）
+            if (curatedVoices.length === 0) {
+                 const fallback = voices.filter(v => v.lang.startsWith('en')).slice(0, 3);
+                 curatedVoices = fallback;
+            } else {
+                // 重複排除
+                curatedVoices = [...new Set(curatedVoices)];
             }
-
-            // 重複排除
-            curatedVoices = [...new Set(curatedVoices)];
 
             return (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
