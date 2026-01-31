@@ -194,6 +194,104 @@
             return properNouns.has(cleanWord);
         };
 
+        // --- COMPONENTS ---
+
+        // Voice Settings Modal
+        const VoiceSettingsModal = ({ isOpen, onClose, voices, selectedVoiceURI, onSelectVoice }) => {
+            if (!isOpen) return null;
+            
+            // 優先したい音声名のリスト
+            const preferredNames = [
+                'Google US English', 
+                'Samantha', // iOS default High Quality
+                'Daniel',   // iOS UK
+                'Arthur', 
+                'Martha', 
+                'Karen', 
+                'Microsoft Zira'
+            ];
+
+            // 厳選ロジック
+            let curatedVoices = [];
+            
+            // 1. 優先リストにあるものを探す
+            preferredNames.forEach(name => {
+                const found = voices.find(v => v.name.includes(name));
+                if (found) curatedVoices.push(found);
+            });
+
+            // 2. もし優先リストのものが少なすぎたら、他の英語音声を追加して5つくらいにする
+            if (curatedVoices.length < 5) {
+                const otherEnglish = voices.filter(v => 
+                    v.lang.startsWith('en') && 
+                    !curatedVoices.includes(v) &&
+                    !v.name.includes('Fred') && // Fredなどは特殊すぎるので除外
+                    !v.name.includes('Albert')
+                );
+                
+                // US/UKを優先して追加
+                otherEnglish.sort((a, b) => {
+                    if (a.lang === 'en-US' && b.lang !== 'en-US') return -1;
+                    if (a.lang === 'en-GB' && b.lang !== 'en-GB') return -1;
+                    return 0;
+                });
+
+                // 足りない分を追加
+                curatedVoices = [...curatedVoices, ...otherEnglish.slice(0, 6 - curatedVoices.length)];
+            }
+
+            // 重複排除
+            curatedVoices = [...new Set(curatedVoices)];
+
+            return (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-white rounded-xl shadow-2xl max-w-sm w-full ui-font overflow-hidden flex flex-col max-h-[80vh]">
+                        <div className="p-4 border-b bg-gray-50 flex justify-between items-center flex-shrink-0">
+                            <h3 className="font-bold text-gray-700">Voice Settings</h3>
+                            <button onClick={onClose} className="text-gray-400 hover:text-gray-600">
+                                <i className="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div className="p-6 overflow-y-auto flex-grow">
+                            <p className="text-sm text-gray-600 mb-4">
+                                Select a preferred voice:
+                            </p>
+                            <div className="space-y-2">
+                                {curatedVoices.map(voice => (
+                                    <button
+                                        key={voice.voiceURI}
+                                        onClick={() => onSelectVoice(voice.voiceURI)}
+                                        className={`w-full text-left p-3 rounded border transition-all flex justify-between items-center ${
+                                            selectedVoiceURI === voice.voiceURI 
+                                            ? 'bg-teal-50 border-teal-500 text-teal-800' 
+                                            : 'border-gray-200 hover:bg-gray-50'
+                                        }`}
+                                    >
+                                        <div className="flex flex-col">
+                                            <span className="font-bold text-sm">{voice.name}</span>
+                                            <span className="text-xs text-gray-500">{voice.lang}</span>
+                                        </div>
+                                        {selectedVoiceURI === voice.voiceURI && <i className="fas fa-check text-teal-600"></i>}
+                                    </button>
+                                ))}
+                                {curatedVoices.length === 0 && (
+                                    <p className="text-red-500 text-sm">No English voices found on this device.</p>
+                                )}
+                            </div>
+                        </div>
+                        <div className="p-4 border-t bg-gray-50 text-right flex-shrink-0">
+                            <button 
+                                onClick={onClose}
+                                className="px-4 py-2 bg-theme-bg text-white rounded hover:opacity-90 transition-colors font-bold"
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            );
+        };
+
         const App = () => {
             const [currentPart, setCurrentPart] = useState('part1');
             const [level, setLevel] = useState(1);
@@ -202,8 +300,12 @@
             const [isFullPlaying, setIsFullPlaying] = useState(false);
             const [isPaused, setIsPaused] = useState(false);
             const [voices, setVoices] = useState([]);
-            const [playbackRate, setPlaybackRate] = useState(1.0); // Default speed
+            const [playbackRate, setPlaybackRate] = useState(1.0); 
             const [level3HiddenKeys, setLevel3HiddenKeys] = useState(new Set());
+            
+            // Voice Settings
+            const [selectedVoiceURI, setSelectedVoiceURI] = useState(null);
+            const [isVoiceSettingsOpen, setIsVoiceSettingsOpen] = useState(false);
             
             // Ref for managing chained playback
             const playbackRef = useRef({
@@ -218,11 +320,50 @@
                 stopPlayback();
             }, [currentPart, level]);
 
+            // 優先音声選択ロジック（リストを渡す形に変更）
+            const getPreferredVoice = useCallback((voiceList) => {
+                const list = voiceList || voices;
+                if (!list || list.length === 0) return null;
+                
+                // 1. Google US English (Chrome/Android High Quality)
+                const googleUS = list.find(v => v.name === 'Google US English');
+                if (googleUS) return googleUS;
+
+                // 2. Samantha (iOS/Mac Default High Quality)
+                const samantha = list.find(v => v.name === 'Samantha');
+                if (samantha) return samantha;
+
+                // 3. Daniel (iOS/Mac UK High Quality)
+                const daniel = list.find(v => v.name === 'Daniel');
+                if (daniel) return daniel;
+
+                // 4. Other Good Voices
+                const others = ['Karen', 'Arthur', 'Martha', 'Microsoft Zira'];
+                for (const name of others) {
+                    const found = list.find(v => v.name.includes(name));
+                    if (found) return found;
+                }
+
+                // 5. Fallback to en-US
+                const enUS = list.find(v => v.lang === 'en-US');
+                if (enUS) return enUS;
+
+                // 6. Any English
+                return list.find(v => v.lang.startsWith('en'));
+            }, [voices]);
+
+            // 音声ロードと初期選択
             useEffect(() => {
                 const loadVoices = () => { 
                     const v = window.speechSynthesis.getVoices();
                     if (v.length > 0) {
                         setVoices(v);
+                        
+                        // 初期選択: 明示的に選択されていない場合のみデフォルトを設定
+                        if (!selectedVoiceURI) {
+                            const preferred = getPreferredVoice(v);
+                            if (preferred) setSelectedVoiceURI(preferred.voiceURI);
+                        }
                     }
                 };
                 loadVoices();
@@ -230,10 +371,11 @@
                     window.speechSynthesis.onvoiceschanged = loadVoices;
                 }
                 
-                // Retry loading voices for iOS Safari which might be lazy
+                // Retry for iOS Safari
                 const timer = setTimeout(loadVoices, 500);
-                return () => clearTimeout(timer);
-            }, []);
+                const timer2 = setTimeout(loadVoices, 2000); 
+                return () => { clearTimeout(timer); clearTimeout(timer2); };
+            }, [selectedVoiceURI, getPreferredVoice]); 
 
             // Data Analysis
             const { fullText, lineStartIndices, sentencesList } = useMemo(() => {
@@ -299,23 +441,12 @@
                 setRevealedKeys(prev => { const newSet = new Set(prev); if (newSet.has(key)) newSet.delete(key); else newSet.add(key); return newSet; });
             };
 
-            const getPreferredVoice = () => {
-                if (!voices || voices.length === 0) {
-                     // Try getting voices again if empty
-                     const v = window.speechSynthesis.getVoices();
-                     if (v.length > 0) setVoices(v);
-                     return null;
+            // 現在選択されている音声オブジェクトを取得
+            const getCurrentVoice = () => {
+                if (selectedVoiceURI) {
+                    return voices.find(v => v.voiceURI === selectedVoiceURI) || getPreferredVoice(voices);
                 }
-                
-                // iOS/Mac向けの高品質音声を優先リストに追加
-                return voices.find(v => v.name === 'Google US English') ||
-                       voices.find(v => v.name === 'Samantha') ||          // iOS/Mac (US) - High Quality
-                       voices.find(v => v.name === 'Daniel') ||            // iOS/Mac (UK) - High Quality
-                       voices.find(v => v.name === 'Karen') ||             // iOS/Mac (AU)
-                       voices.find(v => v.name.includes('Siri') && v.lang.startsWith('en')) || // Siri Voices
-                       voices.find(v => v.name.includes('Zira')) ||        // Windows
-                       voices.find(v => v.lang === 'en-US') ||
-                       voices.find(v => v.lang.startsWith('en'));
+                return getPreferredVoice(voices);
             };
 
             // Playback Control
@@ -338,7 +469,6 @@
             };
 
             const togglePlaybackRate = () => {
-                // Toggle between 1.0 (Normal) and 0.8 (Slow)
                 setPlaybackRate(prev => prev === 1.0 ? 0.8 : 1.0);
             };
 
@@ -361,10 +491,14 @@
 
                 const utterance = new SpeechSynthesisUtterance(sentence.text);
                 utterance.lang = 'en-US';
-                utterance.rate = playbackRate; // Use state rate
+                utterance.rate = playbackRate; 
                 
-                const voice = getPreferredVoice();
-                if (voice) utterance.voice = voice;
+                const voice = getCurrentVoice();
+                if (voice) {
+                    utterance.voice = voice;
+                    // iOSの場合、langもvoiceに合わせてセットし直すと確実
+                    utterance.lang = voice.lang; 
+                }
 
                 utterance.onend = () => {
                     if (!playbackRef.current.isPausedFlag) {
@@ -418,10 +552,13 @@
                 window.speechSynthesis.cancel();
                 const utterance = new SpeechSynthesisUtterance(foundSentence.text);
                 utterance.lang = 'en-US';
-                utterance.rate = playbackRate; // Use state rate
+                utterance.rate = playbackRate; 
                 
-                const voice = getPreferredVoice();
-                if (voice) utterance.voice = voice;
+                const voice = getCurrentVoice();
+                if (voice) {
+                    utterance.voice = voice;
+                    utterance.lang = voice.lang;
+                }
                 
                 utterance.onstart = () => setSpeakingRange({ start: foundSentence.start, end: foundSentence.end });
                 utterance.onend = () => setSpeakingRange(null);
@@ -485,6 +622,13 @@
                                 <div className="flex space-x-1 bg-black/10 p-1 rounded-lg">
                                     {[1, 2, 3, 4].map((lvl) => (<button key={lvl} onClick={() => setLevel(lvl)} className={`px-3 py-1 rounded transition-colors ui-font text-xs font-medium ${level === lvl ? 'bg-white theme-text shadow' : 'text-white hover:bg-white/20'}`}>Lv.{lvl}</button>))}
                                 </div>
+                                <button 
+                                    onClick={() => setIsVoiceSettingsOpen(true)}
+                                    className="px-3 py-1.5 rounded-lg ui-font text-xs font-bold bg-white/20 text-white hover:bg-white/30 flex items-center"
+                                    title="Voice Settings"
+                                >
+                                    <i className="fas fa-cog"></i>
+                                </button>
                             </div>
                         </div>
                     </div>
@@ -539,6 +683,14 @@
                             </div>
                         </div>
                     </div>
+                    
+                    <VoiceSettingsModal 
+                        isOpen={isVoiceSettingsOpen} 
+                        onClose={() => setIsVoiceSettingsOpen(false)}
+                        voices={voices}
+                        selectedVoiceURI={selectedVoiceURI}
+                        onSelectVoice={(uri) => setSelectedVoiceURI(uri)}
+                    />
                 </div>
             );
         };
