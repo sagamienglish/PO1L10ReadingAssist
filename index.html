@@ -207,9 +207,9 @@
         const VoiceSettingsModal = ({ isOpen, onClose, voices, selectedVoiceURI, onSelectVoice }) => {
             if (!isOpen) return null;
             
-            // ユーザー指定の厳選リスト
+            // ユーザー指定の優先リスト
             const preferredNames = [
-                'Google US English', // Chrome/Android High Quality
+                'Google US English', 
                 'Ava',      // iOS High Quality
                 'Samantha', // iOS default High Quality
                 'Daniel',   // iOS UK
@@ -219,19 +219,35 @@
             // 厳選ロジック
             let curatedVoices = [];
             
-            // 優先リストにあるものを探す
+            // 1. 優先リストにあるものを探す（名前で部分一致検索）
             preferredNames.forEach(name => {
                 const found = voices.find(v => v.name.includes(name));
                 if (found) curatedVoices.push(found);
             });
 
-            // もし指定の音声が一つも見つからない場合のフォールバック（何も出ないのを防ぐため）
-            if (curatedVoices.length === 0) {
-                 const fallback = voices.filter(v => v.lang.startsWith('en')).slice(0, 3);
-                 curatedVoices = fallback;
-            } else {
-                // 重複排除
-                curatedVoices = [...new Set(curatedVoices)];
+            // 2. もし優先リストのものが少なすぎたら、他の英語音声を追加
+            if (curatedVoices.length < 5) {
+                 // FredやAlbertなど、特殊な声質のものは除外
+                 const otherEnglish = voices.filter(v => 
+                    v.lang.startsWith('en') && 
+                    !curatedVoices.includes(v) && 
+                    !v.name.includes('Fred') && 
+                    !v.name.includes('Albert') &&
+                    !v.name.includes('Bad News') &&
+                    !v.name.includes('Organ')
+                 ).slice(0, 5 - curatedVoices.length);
+                 
+                 curatedVoices = [...curatedVoices, ...otherEnglish];
+            }
+
+            // 重複排除
+            curatedVoices = [...new Set(curatedVoices)];
+
+            // 何も見つからない場合
+            if (curatedVoices.length === 0 && voices.length > 0) {
+                // とりあえず英語っぽいもの、なければ全部
+                curatedVoices = voices.filter(v => v.lang.startsWith('en')).slice(0,5);
+                if(curatedVoices.length === 0) curatedVoices = voices.slice(0,5);
             }
 
             return (
@@ -316,53 +332,69 @@
                 const list = voiceList || [];
                 if (list.length === 0) return null;
                 
-                // 1. Google US English (Chrome/Android High Quality)
-                const googleUS = list.find(v => v.name === 'Google US English');
-                if (googleUS) return googleUS;
+                // 優先順位リスト
+                const priorities = [
+                    // 1. Google US English
+                    v => v.name === 'Google US English',
+                    // 2. Ava (iOS Premium/Enhanced)
+                    v => v.name.includes('Ava') && v.lang.startsWith('en'),
+                    // 3. Samantha (iOS/Mac Default High Quality)
+                    v => v.name === 'Samantha',
+                    // 4. Daniel (UK)
+                    v => v.name === 'Daniel',
+                    // 5. Karen (AU)
+                    v => v.name === 'Karen',
+                    // 6. Microsoft Zira (Windows)
+                    v => v.name.includes('Zira'),
+                    // 7. その他一般的な英語 (en-US優先)
+                    v => v.lang === 'en-US' && !v.name.includes('Fred') && !v.name.includes('Albert'),
+                    // 8. その他の英語
+                    v => v.lang.startsWith('en')
+                ];
 
-                // 2. Ava (iOS Premium/Enhanced)
-                const ava = list.find(v => v.name.includes('Ava') && v.lang.startsWith('en'));
-                if (ava) return ava;
-
-                // 3. Samantha (iOS/Mac Default High Quality)
-                const samantha = list.find(v => v.name === 'Samantha');
-                if (samantha) return samantha;
-
-                // 4. Other Good Voices
-                const others = ['Daniel', 'Karen', 'Arthur', 'Martha', 'Microsoft Zira'];
-                for (const name of others) {
-                    const found = list.find(v => v.name.includes(name));
+                for (const check of priorities) {
+                    const found = list.find(check);
                     if (found) return found;
                 }
-
-                // 5. Fallback to en-US
-                const enUS = list.find(v => v.lang === 'en-US');
-                if (enUS) return enUS;
-
-                // 6. Any English
-                return list.find(v => v.lang.startsWith('en'));
+                
+                // 見つからなければリストの最初を返す
+                return list[0];
             }, []);
 
-            // 音声ロード用Effect（起動時1回のみ）
+            // 音声ロード用Effect（起動時 & 変更検知時）
+            // 無限ループ防止のため、内容が変わった時だけSetする
             useEffect(() => {
-                const loadVoices = () => { 
-                    const v = window.speechSynthesis.getVoices();
-                    if (v.length > 0) {
-                        setVoices(v);
+                const updateVoices = () => {
+                    const availableVoices = window.speechSynthesis.getVoices();
+                    if (availableVoices.length > 0) {
+                        setVoices(prev => {
+                            // 単純な長さ比較と、先頭要素のURI比較で変更を検知（軽量化）
+                            if (prev.length === availableVoices.length && 
+                                prev.length > 0 && 
+                                prev[0].voiceURI === availableVoices[0].voiceURI) {
+                                return prev; // 変更なし
+                            }
+                            return availableVoices; // 変更あり
+                        });
                     }
                 };
-                loadVoices();
-                if (window.speechSynthesis.onvoiceschanged !== undefined) {
-                    window.speechSynthesis.onvoiceschanged = loadVoices;
-                }
+
+                updateVoices();
                 
-                // Retry for iOS Safari
-                const timer = setTimeout(loadVoices, 500);
-                const timer2 = setTimeout(loadVoices, 2000); 
-                return () => { clearTimeout(timer); clearTimeout(timer2); };
+                // ブラウザによっては非同期でロードされるためイベントリスナーが必要
+                window.speechSynthesis.onvoiceschanged = updateVoices;
+                
+                // iOS Safari対策: タイマーでも試行
+                const timer = setTimeout(updateVoices, 500);
+                
+                return () => {
+                    window.speechSynthesis.onvoiceschanged = null;
+                    clearTimeout(timer);
+                };
             }, []);
 
-            // デフォルト音声選択用Effect（voices更新時のみ）
+            // デフォルト音声選択用Effect
+            // voicesがロードされたタイミングで一度だけ実行、または手動選択がまだの場合に実行
             useEffect(() => {
                 if (voices.length > 0 && !selectedVoiceURI) {
                     const preferred = getPreferredVoice(voices);
@@ -437,12 +469,12 @@
             };
 
             // 現在選択されている音声オブジェクトを取得
-            const getCurrentVoice = () => {
+            const getCurrentVoice = useCallback(() => {
                 if (selectedVoiceURI) {
                     return voices.find(v => v.voiceURI === selectedVoiceURI) || getPreferredVoice(voices);
                 }
                 return getPreferredVoice(voices);
-            };
+            }, [voices, selectedVoiceURI, getPreferredVoice]);
 
             // Playback Control
             const stopPlayback = () => {
@@ -491,7 +523,6 @@
                 const voice = getCurrentVoice();
                 if (voice) {
                     utterance.voice = voice;
-                    // iOSの場合、langもvoiceに合わせてセットし直すと確実
                     utterance.lang = voice.lang; 
                 }
 
