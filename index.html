@@ -205,6 +205,11 @@
 
         // Voice Settings Modal
         const VoiceSettingsModal = ({ isOpen, onClose, voices, selectedVoiceURI, onSelectVoice }) => {
+            const [showAll, setShowAll] = useState(false); // 全表示モード
+
+            // モーダルが開くたびにshowAllをリセットしたい場合はここで制御
+            // useEffect(() => { if (isOpen) setShowAll(false); }, [isOpen]);
+
             if (!isOpen) return null;
             
             // ユーザー指定の優先リスト
@@ -219,15 +224,15 @@
             // 厳選ロジック
             let curatedVoices = [];
             
-            // 1. 優先リストにあるものを探す（名前で部分一致検索）
+            // 優先リストにあるものを探す（名前で部分一致検索）
+            // "Ava" で "Ava (Enhanced)" もヒットするようにする
             preferredNames.forEach(name => {
-                const found = voices.find(v => v.name.includes(name));
-                if (found) curatedVoices.push(found);
+                const foundList = voices.filter(v => v.name.includes(name));
+                curatedVoices.push(...foundList);
             });
 
-            // 2. もし優先リストのものが少なすぎたら、他の英語音声を追加
+            // もし優先リストのものが少なすぎたら、他の英語音声を追加
             if (curatedVoices.length < 5) {
-                 // FredやAlbertなど、特殊な声質のものは除外
                  const otherEnglish = voices.filter(v => 
                     v.lang.startsWith('en') && 
                     !curatedVoices.includes(v) && 
@@ -235,7 +240,7 @@
                     !v.name.includes('Albert') &&
                     !v.name.includes('Bad News') &&
                     !v.name.includes('Organ')
-                 ).slice(0, 5 - curatedVoices.length);
+                 ).slice(0, 5);
                  
                  curatedVoices = [...curatedVoices, ...otherEnglish];
             }
@@ -245,10 +250,14 @@
 
             // 何も見つからない場合
             if (curatedVoices.length === 0 && voices.length > 0) {
-                // とりあえず英語っぽいもの、なければ全部
                 curatedVoices = voices.filter(v => v.lang.startsWith('en')).slice(0,5);
                 if(curatedVoices.length === 0) curatedVoices = voices.slice(0,5);
             }
+
+            // 表示するリストの切り替え
+            const displayVoices = showAll 
+                ? voices.filter(v => v.lang.startsWith('en')).sort((a, b) => a.name.localeCompare(b.name))
+                : curatedVoices;
 
             return (
                 <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
@@ -261,10 +270,10 @@
                         </div>
                         <div className="p-6 overflow-y-auto flex-grow">
                             <p className="text-sm text-gray-600 mb-4">
-                                Select a preferred voice:
+                                {showAll ? "All English Voices:" : "Recommended Voices:"}
                             </p>
                             <div className="space-y-2">
-                                {curatedVoices.map(voice => (
+                                {displayVoices.map(voice => (
                                     <button
                                         key={voice.voiceURI}
                                         onClick={() => onSelectVoice(voice.voiceURI)}
@@ -281,9 +290,18 @@
                                         {selectedVoiceURI === voice.voiceURI && <i className="fas fa-check text-teal-600"></i>}
                                     </button>
                                 ))}
-                                {curatedVoices.length === 0 && (
-                                    <p className="text-red-500 text-sm">No English voices found on this device.</p>
+                                {displayVoices.length === 0 && (
+                                    <p className="text-red-500 text-sm">No English voices found.</p>
                                 )}
+                            </div>
+                            
+                            <div className="mt-4 pt-4 border-t border-gray-100 text-center">
+                                <button 
+                                    onClick={() => setShowAll(!showAll)}
+                                    className="text-xs text-blue-500 hover:text-blue-700 underline"
+                                >
+                                    {showAll ? "Show Recommended Only" : "Show All English Voices"}
+                                </button>
                             </div>
                         </div>
                         <div className="p-4 border-t bg-gray-50 text-right flex-shrink-0">
