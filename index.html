@@ -178,17 +178,20 @@
             "Suri", "Tribe", "Amazon", "Asian", "Earth"
         ]);
 
-        // Helpers
+        // Helpers (Safeguarded against null/undefined)
         const isNewWord = (word, part) => {
+            if (!word || typeof word !== 'string') return false;
             const cleanWord = word.toLowerCase().replace(/^[^\w]+|[^\w]+$/g, '');
             const targetList = newWordsList[part] || [];
             return targetList.includes(cleanWord);
         };
         const isFunctionWord = (word) => {
+            if (!word || typeof word !== 'string') return false;
             const cleanWord = word.toLowerCase().replace(/^[^\w]+|[^\w]+$/g, '');
             return functionWords.has(cleanWord);
         };
         const isProperNounOrNumber = (word) => {
+            if (!word || typeof word !== 'string') return false;
             const cleanWord = word.replace(/[^\w\d]/g, ''); 
             if (/^\d+$/.test(cleanWord)) return true;
             return properNouns.has(cleanWord);
@@ -203,6 +206,7 @@
             // ユーザー指定の厳選リスト
             const preferredNames = [
                 'Google US English', // Chrome/Android High Quality
+                'Ava',      // iOS High Quality
                 'Samantha', // iOS default High Quality
                 'Daniel',   // iOS UK
                 'Karen'     // iOS AU
@@ -312,16 +316,16 @@
                 const googleUS = list.find(v => v.name === 'Google US English');
                 if (googleUS) return googleUS;
 
-                // 2. Samantha (iOS/Mac Default High Quality)
+                // 2. Ava (iOS Premium/Enhanced) - "Ava (Enhanced)" などを柔軟に検索
+                const ava = list.find(v => v.name.includes('Ava') && v.lang.startsWith('en'));
+                if (ava) return ava;
+
+                // 3. Samantha (iOS/Mac Default High Quality)
                 const samantha = list.find(v => v.name === 'Samantha');
                 if (samantha) return samantha;
 
-                // 3. Daniel (iOS/Mac UK High Quality)
-                const daniel = list.find(v => v.name === 'Daniel');
-                if (daniel) return daniel;
-
-                // 4. Other Good Voices
-                const others = ['Karen', 'Arthur', 'Martha', 'Microsoft Zira'];
+                // 4. Other Good Voices (Daniel, Karen, etc.)
+                const others = ['Daniel', 'Karen', 'Arthur', 'Martha', 'Microsoft Zira'];
                 for (const name of others) {
                     const found = list.find(v => v.name.includes(name));
                     if (found) return found;
