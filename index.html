@@ -272,6 +272,23 @@
                             <p className="text-sm text-gray-600 mb-4">
                                 {showAll ? "All English Voices:" : "Recommended Voices:"}
                             </p>
+
+                            {/* Default Device Setting Option */}
+                            <button
+                                onClick={() => onSelectVoice('default')}
+                                className={`w-full text-left p-3 rounded border transition-all flex justify-between items-center mb-4 shadow-sm ${
+                                    selectedVoiceURI === 'default' 
+                                    ? 'bg-teal-50 border-teal-500 text-teal-800 ring-1 ring-teal-500' 
+                                    : 'border-gray-200 hover:bg-gray-50'
+                                }`}
+                            >
+                                <div className="flex flex-col">
+                                    <span className="font-bold text-sm">Use Device Default</span>
+                                    <span className="text-xs text-gray-500">iPad/PC Settings (Auto)</span>
+                                </div>
+                                {selectedVoiceURI === 'default' && <i className="fas fa-check text-teal-600"></i>}
+                            </button>
+
                             <div className="space-y-2">
                                 {displayVoices.map(voice => (
                                     <button
@@ -488,6 +505,9 @@
 
             // 現在選択されている音声オブジェクトを取得
             const getCurrentVoice = useCallback(() => {
+                if (selectedVoiceURI === 'default') {
+                    return null; // デフォルト設定の場合はnullを返す（ブラウザ任せ）
+                }
                 if (selectedVoiceURI) {
                     return voices.find(v => v.voiceURI === selectedVoiceURI) || getPreferredVoice(voices);
                 }
