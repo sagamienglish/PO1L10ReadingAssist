@@ -163,10 +163,14 @@
             "is", "am", "are", "was", "were", "be", "been", "being",
             "do", "does", "did", "have", "has", "had", 
             "will", "would", "can", "could", "shall", "should", "may", "might", "must",
-            "i", "you", "he", "she", "it", "we", "they", "me", "him", "her", "us", "them",
-            "my", "your", "his", "its", "our", "their", "mine", "yours", "hers", "ours", "theirs",
-            "this", "that", "these", "those", "who", "which", "what", "where", "when", "why", "how",
-            "a", "an", "the", "in", "on", "at", "to", "for", "from", "of", "with", "by", "about", 
+            "i", "you", "he", "she", "it", "we", "they",
+            "me", "him", "her", "us", "them",
+            "my", "your", "his", "its", "our", "their",
+            "mine", "yours", "hers", "ours", "theirs",
+            "this", "that", "these", "those",
+            "who", "which", "what", "where", "when", "why", "how",
+            "a", "an", "the",
+            "in", "on", "at", "to", "for", "from", "of", "with", "by", "about", 
             "as", "into", "like", "through", "after", "over", "between", "out", 
             "against", "during", "without", "before", "under", "around", "among",
             "and", "but", "or", "so", "because", "if", "while", "although", "though", "since",
@@ -307,16 +311,16 @@
                 stopPlayback();
             }, [currentPart, level]);
 
-            // 優先音声選択ロジック（リストを渡す形に変更）
+            // 優先音声選択ロジック（Stateに依存しない純粋関数化）
             const getPreferredVoice = useCallback((voiceList) => {
-                const list = voiceList || voices;
-                if (!list || list.length === 0) return null;
+                const list = voiceList || [];
+                if (list.length === 0) return null;
                 
                 // 1. Google US English (Chrome/Android High Quality)
                 const googleUS = list.find(v => v.name === 'Google US English');
                 if (googleUS) return googleUS;
 
-                // 2. Ava (iOS Premium/Enhanced) - "Ava (Enhanced)" などを柔軟に検索
+                // 2. Ava (iOS Premium/Enhanced)
                 const ava = list.find(v => v.name.includes('Ava') && v.lang.startsWith('en'));
                 if (ava) return ava;
 
@@ -324,7 +328,7 @@
                 const samantha = list.find(v => v.name === 'Samantha');
                 if (samantha) return samantha;
 
-                // 4. Other Good Voices (Daniel, Karen, etc.)
+                // 4. Other Good Voices
                 const others = ['Daniel', 'Karen', 'Arthur', 'Martha', 'Microsoft Zira'];
                 for (const name of others) {
                     const found = list.find(v => v.name.includes(name));
@@ -337,20 +341,14 @@
 
                 // 6. Any English
                 return list.find(v => v.lang.startsWith('en'));
-            }, [voices]);
+            }, []);
 
-            // 音声ロードと初期選択
+            // 音声ロード用Effect（起動時1回のみ）
             useEffect(() => {
                 const loadVoices = () => { 
                     const v = window.speechSynthesis.getVoices();
                     if (v.length > 0) {
                         setVoices(v);
-                        
-                        // 初期選択: 明示的に選択されていない場合のみデフォルトを設定
-                        if (!selectedVoiceURI) {
-                            const preferred = getPreferredVoice(v);
-                            if (preferred) setSelectedVoiceURI(preferred.voiceURI);
-                        }
                     }
                 };
                 loadVoices();
@@ -362,7 +360,17 @@
                 const timer = setTimeout(loadVoices, 500);
                 const timer2 = setTimeout(loadVoices, 2000); 
                 return () => { clearTimeout(timer); clearTimeout(timer2); };
-            }, [selectedVoiceURI, getPreferredVoice]); 
+            }, []);
+
+            // デフォルト音声選択用Effect（voices更新時のみ）
+            useEffect(() => {
+                if (voices.length > 0 && !selectedVoiceURI) {
+                    const preferred = getPreferredVoice(voices);
+                    if (preferred) {
+                        setSelectedVoiceURI(preferred.voiceURI);
+                    }
+                }
+            }, [voices, selectedVoiceURI, getPreferredVoice]);
 
             // Data Analysis
             const { fullText, lineStartIndices, sentencesList } = useMemo(() => {
